@@ -5,7 +5,7 @@ display(df)
 # COMMAND ----------
 
 #table 1 品牌價格摘要
-from pyspark.sql.functions import count, avg, min, max, round
+from pyspark.sql.functions import count, avg, min, max, round, col
 
 brand_price_summary = (
     df.groupBy("brand")
@@ -15,6 +15,7 @@ brand_price_summary = (
           round(min("price"), 2).alias("min_price"),
           round(max("price"), 2).alias("max_price")
       )
+      .filter(col("product_count") >= 5) #過濾樣本太少的品牌，有發現一個叫做bestnotebook應該是誤植
       .orderBy("avg_price", ascending=False)
 )
 
@@ -40,6 +41,7 @@ df_price_band = df.withColumn(
 price_band_summary = (
     df_price_band.groupBy("brand", "price_band")
     .agg(count("*").alias("product_count"))
+    .filter(col("product_count") >= 5)
     .orderBy("brand", "price_band")
 )
 
@@ -71,33 +73,51 @@ display(spec_price_summary)
 # COMMAND ----------
 
 #table 4 看CP值
+from pyspark.sql.functions import col, round
 
-from pyspark.sql.functions import lit
-
-if "rating" in df.columns:
-    cp_value_ranking = (
-        df.withColumn("rating_num", col("rating").cast("double"))
-          .withColumn("cp_score", round(col("rating_num") / col("price"), 6))
-          .select(
-              "brand",
-              "price",
-              "rating_num",
-              "ram_gb",
-              "harddisk_gb",
-              "screen_size",
-              "cp_score"
-          )
-          .where(col("price").isNotNull())
-          .orderBy("cp_score", ascending=False)
+cp_value_ranking = (
+    df
+    .withColumn("rating_num", col("rating").cast("double"))
+    .where(col("price").isNotNull())
+    .where(col("price") > 0)
+    .where(col("rating_num").isNotNull())
+    .where(col("ram_gb").isin([4, 8, 16, 32, 64]))
+    .where(col("harddisk_gb").isin([128, 256, 512, 1024, 2048]))
+    .withColumn(
+        "spec_score",
+        col("rating_num") * 0.4
+        + (col("ram_gb") / 16) * 0.3
+        + (col("harddisk_gb") / 512) * 0.3
     )
-
-    cp_value_ranking.write.mode("overwrite").format("delta").saveAsTable(
-        "databricks0501.gold.cp_value_ranking"
+    .withColumn(
+        "cp_score",
+        round(col("spec_score") / col("price"), 6)
     )
+    .select(
+        "brand",
+        "model",
+        "price",
+        "rating_num",
+        "ram_gb",
+        "harddisk_gb",
+        "screen_size",
+        "spec_score",
+        "cp_score"
+    )
+    .orderBy("cp_score", ascending=False)
+)
 
-    display(cp_value_ranking)
-else:
-    print("No rating column found. Use a spec-based CP score instead.")
+cp_value_ranking.write.mode("overwrite").format("delta").saveAsTable(
+    "databricks0501.gold.cp_value_ranking"
+)
+
+display(cp_value_ranking)
+
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS databricks0501.gold.cp_value_ranking;
 
 # COMMAND ----------
 
