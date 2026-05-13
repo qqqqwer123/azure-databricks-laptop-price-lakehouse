@@ -2,6 +2,7 @@
 
 本專案以筆電產品資料為主題，建立一個基於 **Azure Databricks Lakehouse** 的資料工程與分析作品集。專案重點不只是完成資料分析，而是將原始 CSV 資料轉換為可治理、可重複執行、可供商業分析使用的資料管線。  
 
+
 目前已完成：
 - 使用 Databricks 建立 Bronze / Silver / Gold Medallion Architecture
 - 使用 PySpark 進行資料清理與轉換
@@ -13,6 +14,7 @@
 
 ## 1. 專案目標
 本專案模擬企業資料平台中的資料處理流程，將原始筆電商品資料整理成可供分析與決策使用的資料產品。
+本專案展示如何使用 Azure Blob Storage、ADF、Azure Databricks、Unity Catalog、ML training notebook 與 Streamlit，建立一個從資料攝取、資料治理、Gold analytics、模型訓練到互動式價格模擬器的端到端 Lakehouse data product。
 
 主要目標包括：
 
@@ -22,51 +24,47 @@
 4. 建立 Gold Layer 商業分析表
 5. 使用 Unity Catalog 管理資料權限
 6. 為後續 ML 分析與互動式預測介面建立基礎
+7. 產出Streamlit產品介面
 
 ## 2. 專案架構 (Project Architecture)
 
 ```mermaid
 graph TD
-    A[Kaggle Laptop CSV] --> B[Unity Catalog Volume / Raw File Zone]
+    A[Kaggle Laptop CSV] --> B[Azure Blob Storage]
+    B --> C[Azure Data Factory]
+    C --> D[Databricks Bronze Table]
+    D --> E[Databricks Silver Table]
+    E --> F[Gold Analytics Tables]
+    E --> G[ML Training Notebook]
+    G --> H[Gold ML Result Tables]
+    G --> I[Random Forest Model Artifact]
 
-    subgraph DBX[Azure Databricks Lakehouse]
-        C[Bronze Delta Table<br/>Raw Data]
-        D[Silver Delta Table<br/>Cleaned Data]
-        E[Gold Delta Tables<br/>Business-ready Analytics]
-        C --> D
-        D --> E
-    end
+    F --> J[Databricks Dashboard]
+    F --> K[Genie Space]
+    F --> L[Streamlit App]
+    H --> L
+    I --> L
 
-    B --> C
-
-    subgraph GOV[Unity Catalog Governance]
-        F[Catalog: coco_portfolio]
-        G[Role-based Access Control]
-    end
-
-    F -. governs .-> C
-    F -. governs .-> D
-    F -. governs .-> E
-    G -. controls access .-> E
-
-    E --> H[Databricks SQL Dashboard]
-    E --> I[ML Analysis<br/>Feature Importance / Residual / What-if]
-
-    J[Azure Data Factory<br/>Orchestration - Planned] -. triggers .-> DBX
-    I --> K[Streamlit App<br/>Future Work]
+    M[Unity Catalog Governance] -. governs .-> D
+    M -. governs .-> E
+    M -. governs .-> F
+    M -. governs .-> H
 ```
 
 ## 3.目前完成進度:
-| 模組                       | 狀態          | 說明                                                           |
-| ------------------------ | ----------- | ----------------------------------------------------------------- |
-| Bronze Layer             | 已完成         | 原始 CSV 已上傳至 Unity Catalog Volume，並轉換為 Bronze Delta Table |
-| Silver Layer             | 已完成         | 完成欄位標準化、價格格式處理、RAM / 儲存容量單位轉換、缺失值處理與去重  |
-| Gold Layer               | 已完成         | 建立品牌價格摘要、價格帶分布、規格價格摘要與 CP 值排行表   |
-| Unity Catalog Governance | 已完成         | 建立 Data Engineer、Data Analyst、Business User 權限模型   |
-| Databricks Dashboard     | 已完成         | 使用 Gold Tables 建立商業分析儀表板 |
-| ML Analysis              | 進行中         | 規劃 feature importance、brand premium residual 與 what-if prediction |
-| ADF Orchestration        | 已完成         | 後續使用 ADF 串接 Bronze / Silver / Gold notebooks  |
-| Streamlit App            | Future Work | 後續建立互動式價格預測介面 |
+| 模組                       | 狀態        | 說明                                         |
+| ------------------------ | --------- | -------------------------------------------------- |
+| Azure Blob Storage       | 已完成       | 作為 raw CSV landing zone           |
+| Azure Data Factory       | 已完成       | 串接 Blob、Databricks notebooks 與 pipeline execution |
+| Bronze Layer             | 已完成       | 建立 raw landing / Bronze Delta table    |
+| Silver Layer             | 已完成       | 完成價格、RAM、Storage、品牌與螢幕尺寸清理  |
+| Gold Analytics Layer     | 已完成       | 建立品牌價格、價格帶、規格分析、CP 值排行   |
+| Unity Catalog Governance | 已完成       | 設計 Data Engineer / Analyst / Business User 權限模型 |
+| Databricks Dashboard     | 已完成       | 使用 Gold tables 建立內部 BI dashboard   |
+| ML Layer                 | 已完成       | 訓練 Random Forest，產出模型評估、特徵重要性、品牌溢價與 what-if tables |
+| Streamlit App            | 已完成       | 建立外部展示型互動式價格模擬器  |
+| Deployment               | 進行中       | 第一版規劃使用 Streamlit Community Cloud  |
+
 ## 4. 核心商業問題定義 
 
 | 問題                            | 分析類型                     | 對應資料層 / 方法   |
@@ -99,7 +97,7 @@ Bronze Layer 的目標是保留原始資料，避免在第一層進行過度清�
 保留原始欄位
 加入資料來源與 ingestion timestamp 等 metadata  
 輸出表：
-coco_portfolio.bronze.laptop_raw
+bronze.laptop_raw
 ### 5.2 Silver Layer
 Silver Layer 的目標是將 Bronze 原始資料轉換成乾淨、可重複使用的分析資料。
 
@@ -115,7 +113,7 @@ screen_size 轉換為數值型態
 加入 Silver 更新時間
 
 輸出表：
-coco_portfolio.silver.laptop_cleaned
+silver.laptop_cleaned
 ### 5.3 Gold Layer
 Gold Layer 的目標是建立可直接用於商業分析、Dashboard 與後續 ML 分析的資料產品。
 
@@ -126,6 +124,14 @@ price_band_summary	分析不同品牌在 Low / Mid / High / Premium 價格帶的
 spec_price_summary	分析 RAM、儲存容量與平均價格的關係  
 cp_value_ranking	根據價格與評分 / 規格建立 CP 值排行
 
+**cp_value_ranking補充:**
+第一版 CP score 我先用 rating / price，代表評分相對價格的效率。但我發現這會偏向低價、低規格產品，因此我進一步設計 spec-adjusted CP score，把 rating、RAM、storage 納入綜合價值分數，再除以價格。這樣可以避免便宜但規格過低的產品被排到太前面，也比較符合使用者在選購筆電時對性價比的直覺。
+spec_score =
+rating_num * 0.4
++ normalized_ram_score * 0.3
++ normalized_storage_score * 0.3
+
+cp_score = spec_score / price：算出 每花 1 元，可以買到多少規格價值
 
 ### 5.4 權限治理 Unity Catalog
 我在 Databricks 裡用 Unity Catalog 做資料治理。依照 Bronze、Silver、Gold 分層。Bronze 放原始資料，Silver 放清理後資料，Gold 放商業分析表。
@@ -175,6 +181,7 @@ Dashboard 規劃包含：
 
 ADF 在本專案中不是單純的資料搬移工具，而是負責串接不同 Azure 服務之間的資料流、執行順序與錯誤監控。整體流程如下：
 
+![Unity Catalog Grants](docs/ADF_02.png)
 
 ### 7.1 ADF 在本專案中的角色
 
@@ -190,6 +197,8 @@ Pipeline 中的主要 activities 包含：
 | Copy data1         | Copy Activity                | 將 Blob CSV 匯入 Databricks Delta Lake landing table |
 | 02_silver_cleaning | Databricks Notebook Activity | 清理、標準化與型別轉換資料                                     |
 | 03_gold_SP         | Databricks Notebook Activity | 產生 Gold analytical tables                         |
+| 04_ml_training_laptop_price | Databricks Notebook Activity | 產生ML gold table跟pkl檔案    |
+
 
 ```mermaid
 flowchart TD
@@ -200,13 +209,16 @@ flowchart TD
     E[02_silver_cleaning]
     F[03_gold_SP]
     G[Gold analytical tables]
-
+    H[04_ml_training_laptop_price]
+    I[ML Gold analytical tables]
     A --> B
     B --> C
     C --> D
     D --> E
+    E --> H
     E --> F
     F --> G
+    H --> I
 ```
 ### 使用的 Azure 與 Databricks 元件
 
@@ -285,6 +297,21 @@ command-execution
 
 ![Unity Catalog Grants](docs/ADF_01.png)
 
-### 7.6 後續改進方向說明
+## 8. ML Layer：Laptop Price Prediction
+
+ML 接在 Silver layer 後面。
+訓練資料來源是 databricks0501.silver.laptop_cleaned。
+模型輸入是 brand、ram_gb、harddisk_gb、screen_size。
+預測目標是 price。
+使用 Linear Regression 作為 baseline，Random Forest 作為主要模型。
+模型結果寫回 Gold ML tables。
+模型 artifact 存成 .pkl，供 Streamlit 使用。
+
+## 9. Streamlit App：Product Demo
+
+Streamlit app 並不是取代 Databricks Dashboard，而是將 Databricks 產出的 Gold tables 與 Random Forest model artifact 包裝成一個外部可操作的互動式 data product。核心價值則是 Price Simulator，使用者可以輸入品牌、RAM、Storage 與螢幕尺寸，即時取得模型預測價格。
+Streamlit 介面雛形有使用 AI 輔助產生，但資料來源設計、頁面分類、模型串接邏輯、欄位對應、中文介面與分析解讀皆依照本專案需求進行整理與修改。
+
+### 10. 後續改進方向說明
 
 本專案目前已完成 Azure Blob Storage、ADF、Databricks、Delta Lake 與 Unity Catalog 的端到端串接。後續若要進一步接近企業級 production pipeline，可以從安全性、治理、監控與自動化幾個方向強化。例如，將 Blob Storage 升級為 ADLS Gen2 作為正式 Data Lake，並使用 Managed Identity 或 Service Principal 取代 Storage Account Key，以降低金鑰外洩與人工維護風險；同時可導入 Azure Key Vault 與 Unity Catalog External Location，集中管理機密與外部資料位置。在資料品質與營運面，則可以加入 data quality report 與 ADF schedule trigger，讓 pipeline 不只可以手動執行，也能定期自動化運行並監控資料品質。
