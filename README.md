@@ -2,6 +2,8 @@
 
 本專案以筆電產品資料為主題，建立一個基於 **Azure Databricks Lakehouse** 的資料工程與分析作品集。專案重點不只是完成資料分析，而是將原始 CSV 資料轉換為可治理、可重複執行、可供商業分析使用的資料管線。  
 
+**筆電價格智能分析平台網址:** https://azure-databricks-laptop-price-lakehouse-4vshivqfgfzfabzvfdqqqj.streamlit.app/
+
 
 目前已完成：
 - 使用 Databricks 建立 Bronze / Silver / Gold Medallion Architecture
@@ -10,6 +12,7 @@
 - 使用 Unity Catalog 設計資料治理與權限控管
 - 建立 Gold Layer 分析表，支援後續 Databricks Dashboard
 - 規劃 ADF orchestration 與 ML 分析延伸
+- 創建 Steamlit App畫面
 
 
 ## 1. 專案目標
@@ -63,7 +66,7 @@ graph TD
 | Databricks Dashboard     | 已完成       | 使用 Gold tables 建立內部 BI dashboard   |
 | ML Layer                 | 已完成       | 訓練 Random Forest，產出模型評估、特徵重要性、品牌溢價與 what-if tables |
 | Streamlit App            | 已完成       | 建立外部展示型互動式價格模擬器  |
-| Deployment               | 進行中       | 第一版規劃使用 Streamlit Community Cloud  |
+| Deployment               | 已完成       | 第一版規劃使用 Streamlit Community Cloud  |
 
 ## 4. 核心商業問題定義 
 
@@ -82,8 +85,8 @@ graph TD
 | 層級           | 目的                             | 產出                                     |
 | ------------ | ------------------------------ | -------------------------------------- |
 | Landing Zone | 儲存原始 CSV 檔案                    | Unity Catalog Volume                   |
-| Bronze       | 保留原始資料結構，加入 ingestion metadata | `coco_portfolio.bronze.laptop_raw`     |
-| Silver       | 清理、標準化與轉型資料                    | `coco_portfolio.silver.laptop_cleaned` |
+| Bronze       | 保留原始資料結構，加入 ingestion metadata | `bronze.laptop_raw`     |
+| Silver       | 清理、標準化與轉型資料                    | `silver.laptop_cleaned` |
 | Gold         | 建立可直接用於分析與 dashboard 的資料產品     | 多張 Gold analytical tables              |
 
 
@@ -220,16 +223,6 @@ flowchart TD
     F --> G
     H --> I
 ```
-### 使用的 Azure 與 Databricks 元件
-
-| 改進方向                                                           | 目的      | 預期效益                                             |
-| -------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------ |
-| 改用 ADLS Gen2 作為正式 Data Lake     | 使用更適合大數據分析的 data lake storage    | 支援 hierarchical namespace、權限控管與更完整的 lakehouse 架構 |
-| 使用 Managed Identity 或 Service Principal 取代 Storage Account Key | 避免直接管理長期有效的 storage key    | 提升安全性，降低 key 洩漏與 rotation 成本    |
-| 使用 Azure Key Vault 管理 secret        | 將機密集中管理 | 更符合企業級 secret management 與 audit 需求  |
-| 設定 Unity Catalog External Location  | 讓 Unity Catalog 正式管理外部 storage path               | 強化資料治理、權限控管與資料資產管理 |
-| 加入 data quality report   | 監控 row count、null rate、schema drift、duplicate 等問題 | 提升 pipeline 可靠性，讓資料異常更容易被發現  |
-| 加入 ADF schedule trigger    | 讓 pipeline 可定期自動執行   | 從手動 pipeline 進一步變成自動化資料流程  |
 
 
 ### 7.2 ADF Linked Service 設計
@@ -275,43 +268,162 @@ compute / clusters,
 jobs,
 secrets,
 command-execution
-這個問題讓我理解到，在雲端服務串接中，「可以登入」不代表「可以執行」。權限會被拆成很多層，因此，在建立 ADF 與 Databricks 的連線時，必須同時確認 workspace URL、cluster ID、token scope 與 cluster permission 都正確。
+這個問題讓我理解到，在雲端服務串接中，「可以登入」不代表「可以執行」。權限會被拆成很多層，因此，在建立 ADF 與 Databricks 的連線時，需要同時確認：
+
+Databricks workspace URL
+Cluster ID
+PAT token scope
+Cluster permission
+Notebook 路徑
+Linked service 設定
 
 ### 7.4 Databricks Secret 與 Storage Account Key 管理
 
 本專案的原始資料放在 Azure Blob Storage，因此 Databricks cluster 需要具備讀取該 Storage Account 的權限。
 
-為了避免將 Storage Account Key 直接寫在 notebook 或 GitHub 中，本專案使用 Databricks Secrets 管理敏感資訊。
+為了避免將 Storage Account Key 直接寫在 notebook 或 GitHub 中，本專案使用 Databricks Secrets 管理敏感資訊。實作方式如下：
 
-1. 建立 Secret Scope
-2. 將 Azure Storage Account Key 存入 secret
-3. 接著在 Databricks cluster 的 Spark Config 中引用該 secret  
+建立 Databricks Secret Scope
+將 Azure Storage Account Key 存入 secret
+在 Databricks cluster 的 Spark Config 中引用該 secret
+Databricks notebook 透過 cluster 設定安全讀取 Blob Storage
 
-**這樣做的好處是：**
-- Storage Account Key 不會出現在 notebook 程式碼中
-- Key 不會被 commit 到 GitHub
-- Cluster 可以安全地讀取 Blob Storage
-- 未來如果 key rotation，只需要更新 secret，不需要修改 pipeline code
+**這樣做的好處包括：**
 
-### 7.5 Databricks Secret 與 Storage Account Key 管理
+Storage Account Key 不會直接出現在 notebook 程式碼中
+機密資訊不會被 commit 到 GitHub
+Cluster 可以安全地讀取 Azure Blob Storage
+未來如果需要 key rotation，只需要更新 secret，不需要修改 pipeline code
 
-![Unity Catalog Grants](docs/ADF_01.png)
+
+
+### 7.5 後續改進方向
+
+目前本專案已完成 Azure Blob Storage、ADF、Azure Databricks、Delta Lake、Unity Catalog 與 ML Notebook 的端到端串接。若要進一步接近企業級 production pipeline，後續可以從安全性、治理、監控與自動化幾個方向強化。
+
+
+| 未來改進方向                                                           | 目的      | 預期效益                                             |
+| -------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------ |
+| 改用 ADLS Gen2 作為正式 Data Lake     | 使用更適合大數據分析的 data lake storage    | 支援 hierarchical namespace、權限控管與更完整的 lakehouse 架構 |
+| 使用 Managed Identity 或 Service Principal 取代 Storage Account Key | 避免直接管理長期有效的 storage key    | 提升安全性，降低 key 洩漏與 rotation 成本    |
+| 使用 Azure Key Vault 管理 secret        | 將機密集中管理 | 更符合企業級 secret management 與 audit 需求  |
+| 設定 Unity Catalog External Location  | 讓 Unity Catalog 正式管理外部 storage path               | 強化資料治理、權限控管與資料資產管理 |
+| 加入 data quality report   | 監控 row count、null rate、schema drift、duplicate 等問題 | 提升 pipeline 可靠性，讓資料異常更容易被發現  |
+| 加入 ADF schedule trigger    | 讓 pipeline 可定期自動執行   | 從手動 pipeline 進一步變成自動化資料流程  |
+
 
 ## 8. ML Layer：Laptop Price Prediction
 
-ML 接在 Silver layer 後面。
-訓練資料來源是 databricks0501.silver.laptop_cleaned。
-模型輸入是 brand、ram_gb、harddisk_gb、screen_size。
-預測目標是 price。
-使用 Linear Regression 作為 baseline，Random Forest 作為主要模型。
-模型結果寫回 Gold ML tables。
-模型 artifact 存成 .pkl，供 Streamlit 使用。
+本專案在 Silver layer 後加入 ML layer，使用清理後的資料訓練筆電價格預測模型。ML 的目標不是單純追求最高準確率，而是展示如何將 Databricks Lakehouse 中的乾淨資料進一步轉換為可解釋、可應用的模型結果，並提供給後續 Dashboard 與 Streamlit App 使用。
 
-## 9. Streamlit App：Product Demo
+### 8.1 模型資料來源
 
-Streamlit app 並不是取代 Databricks Dashboard，而是將 Databricks 產出的 Gold tables 與 Random Forest model artifact 包裝成一個外部可操作的互動式 data product。核心價值則是 Price Simulator，使用者可以輸入品牌、RAM、Storage 與螢幕尺寸，即時取得模型預測價格。
-Streamlit 介面雛形有使用 AI 輔助產生，但資料來源設計、頁面分類、模型串接邏輯、欄位對應、中文介面與分析解讀皆依照本專案需求進行整理與修改。
+ML 訓練資料來自：
 
-### 10. 後續改進方向說明
+`databricks0501.silver.laptop_cleaned`
+
+Silver table 已完成價格、RAM、儲存容量、品牌與螢幕尺寸等欄位的清理與標準化，因此適合作為模型訓練資料來源。
+
+模型使用的主要欄位如下：
+
+| 類型 | 欄位 | 說明 |
+|---|---|---|
+| Numerical Features | `ram_gb` | RAM 容量，單位為 GB |
+| Numerical Features | `harddisk_gb` | 儲存容量，單位為 GB |
+| Numerical Features | `screen_size` | 螢幕尺寸 |
+| Categorical Feature | `brand` | 筆電品牌 |
+| Target | `price` | 筆電價格 |
+
+### 8.2 模型設計
+
+本專案使用 `Linear Regression` 作為 baseline model，並使用 `Random Forest Regressor` 作為主要模型。
+
+模型流程包含：
+
+1. 從 Silver table 讀取清理後資料  
+2. 選取 `brand`、`ram_gb`、`harddisk_gb`、`screen_size` 作為模型輸入  
+3. 使用 `price` 作為預測目標  
+4. 對數值欄位進行缺失值補值與標準化  
+5. 對品牌欄位進行 One-Hot Encoding  
+6. 比較 Linear Regression 與 Random Forest 的 validation performance  
+7. 將模型結果寫回 Gold ML tables  
+8. 將訓練完成的 Random Forest pipeline 存成 `.pkl` artifact，供 Streamlit 使用  
+
+### 8.3 ML Gold Tables
+
+ML notebook 會產出以下 Gold ML tables：
+
+| Table | 說明 |
+|---|---|
+| `model_evaluation_metrics` | 比較 Linear Regression 與 Random Forest 的 MAE、RMSE、R² |
+| `feature_importance_summary` | 顯示 Random Forest 中影響價格預測的重要特徵 |
+| `brand_premium_residual` | 分析在相似規格條件下，各品牌實際價格與模型預測價格的差異 |
+| `what_if_prediction_results` | 建立固定規格升級情境，模擬不同品牌與硬體規格下的預測價格變化 |
+
+### 8.4 Brand Premium Residual
+
+除了直接預測價格，本專案也設計了品牌溢價分析。方法是建立一個不包含 `brand` 欄位的模型，只根據 RAM、Storage 和 Screen Size 預測價格，再比較實際價格與預測價格的差異。
+
+計算邏輯如下：
+
+`residual = actual_price - predicted_price`
+
+若 residual 為正，代表該品牌在相似規格下的實際售價高於模型預測值，可能具有較高品牌溢價；若 residual 為負，則代表該品牌在相似規格下價格相對較低。
+
+這個分析可以幫助回答：
+
+> 在硬體規格相近的情況下，哪些品牌仍能維持較高售價？
+
+### 8.5 Model Artifact
+
+訓練完成後，本專案將 Random Forest pipeline 儲存為模型檔案：
+
+`laptop_price_rf_model.pkl`
+
+同時也儲存模型需要的欄位資訊：
+
+`model_features.pkl`
+
+這兩個檔案會提供給 Streamlit App 使用，讓使用者可以在前端輸入品牌、RAM、儲存容量與螢幕尺寸，即時取得模型預測價格。
+
+
+## 9. Streamlit App：External-facing Data Product Demo
+
+本專案除了在 Databricks Dashboard 中建立內部 BI 報表，也另外建立 Streamlit App 作為外部展示型 data product demo。
+
+Databricks Dashboard 主要用來展示 Gold layer 的固定分析結果，適合企業內部 business users 查看品牌價格、價格帶分布、規格價格分析與 CP 值排行。Streamlit App 則是將 Databricks 產出的 Gold tables 與 Random Forest model artifact 包裝成一個可操作的互動式介面，讓使用者不需要進入 Databricks，也可以直接透過網頁查看分析結果與操作模型。
+
+### 9.1 Streamlit App 的定位
+
+Streamlit App 並不是用來取代 Databricks Dashboard，而是作為一個更接近外部使用者或面試官可以操作的產品介面。
+
+| 工具 | 定位 | 使用情境 |
+|---|---|---|
+| Databricks Dashboard | 內部 BI 報表 | 查看固定 Gold table 分析結果 |
+| Genie Space | 自然語言資料探索 | 透過問題探索 Gold tables |
+| Streamlit App | 外部展示型 data product | 操作互動式價格模擬器與模型結果 |
+
+### 9.2 Streamlit App 使用的資料
+
+第一版 Streamlit App 採用低成本且穩定的部署方式，沒有直接連線 Databricks，而是讀取從 Databricks 匯出的 Gold CSV outputs 與模型 artifact。
+
+資料流如下：
+
+```text
+Databricks Gold Tables
+    ↓ export as CSV
+streamlit_app/data/
+
+Databricks Trained Model
+    ↓ export as .pkl
+streamlit_app/models/
+
+Streamlit App
+    ↓
+Market Analytics + ML Insights + Price Simulator
+
+```
+
+##  10. 後續改進方向說明
 
 本專案目前已完成 Azure Blob Storage、ADF、Databricks、Delta Lake 與 Unity Catalog 的端到端串接。後續若要進一步接近企業級 production pipeline，可以從安全性、治理、監控與自動化幾個方向強化。例如，將 Blob Storage 升級為 ADLS Gen2 作為正式 Data Lake，並使用 Managed Identity 或 Service Principal 取代 Storage Account Key，以降低金鑰外洩與人工維護風險；同時可導入 Azure Key Vault 與 Unity Catalog External Location，集中管理機密與外部資料位置。在資料品質與營運面，則可以加入 data quality report 與 ADF schedule trigger，讓 pipeline 不只可以手動執行，也能定期自動化運行並監控資料品質。
