@@ -4,6 +4,7 @@
 
 **筆電價格智能分析平台網址:** https://azure-databricks-laptop-price-lakehouse-4vshivqfgfzfabzvfdqqqj.streamlit.app/
 
+**英文介面:** https://azure-databricks-laptop-price-lakehouse-jvjazgmq6xxzz7swkvh43g.streamlit.app/
 
 目前已完成：
 - 使用 Databricks 建立 Bronze / Silver / Gold Medallion Architecture
