@@ -222,6 +222,7 @@ page = st.sidebar.radio(
         "📊 市場分析",
         "🤖 模型洞察",
         "💻 價格模擬器",
+        "🧠 AI 產品分析（開發中）",
     ],
 )
 
@@ -669,4 +670,106 @@ elif page == "💻 價格模擬器":
         </div>
         """,
         unsafe_allow_html=True,
+    )
+# =========================================================
+# Page 6: AI
+# =========================================================
+elif page == "🧠 AI 產品分析（開發中）":
+    render_header(
+        "AI 產品分析模組（開發中）",
+        "未來將基於 Databricks Gold Layer 資料，自動產生品牌定位、價格區間、CP 值解釋與產品策略建議。",
+    )
+
+    st.markdown(
+        """
+        <div class='info-box'>
+        此模組規劃將筆電價格分析平台從傳統 Dashboard 延伸為 AI-assisted analytics product。
+        系統將使用 Gold Layer 的品牌價格摘要、價格帶分布、規格價格關係與 CP 值排行資料，
+        產生商業導向的產品洞察與分析建議。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='section-title'>規劃中的 AI 功能</div>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown(
+            """
+            <div class='metric-card'>
+            <div class='metric-value'>AI Insight Generator</div>
+            <div class='small-note'>
+            根據 Gold Layer 摘要資料，自動產生市場概況、品牌定位與價格區間分析。
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div class='metric-card'>
+            <div class='metric-value'>CP Value Explanation</div>
+            <div class='small-note'>
+            針對 CP 值排行結果，說明高性價比產品的可能原因、適合客群與分析限制。
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col3:
+        st.markdown(
+            """
+            <div class='metric-card'>
+            <div class='metric-value'>Product Analyst Assistant</div>
+            <div class='small-note'>
+            讓使用者以自然語言詢問品牌、價格、規格與產品策略相關問題。
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div class='section-title'>預計資料流程</div>", unsafe_allow_html=True)
+
+    st.code(
+        """
+Databricks Gold Tables
+    ↓
+資料摘要與特徵整理
+    ↓
+Prompt Template
+    ↓
+LLM-based Insight Generation
+    ↓
+Streamlit AI Product Analyst Module
+        """,
+        language="text",
+    )
+
+    st.markdown("<div class='section-title'>開發 Roadmap</div>", unsafe_allow_html=True)
+
+    roadmap = pd.DataFrame(
+        [
+            ["Phase 1", "AI Insight Generator", "根據品牌與價格摘要自動產生商業洞察", "Planned"],
+            ["Phase 2", "CP Ranking Explanation", "解釋性價比排行背後的可能原因與限制", "Planned"],
+            ["Phase 3", "AI Q&A Assistant", "讓使用者以自然語言詢問產品與市場問題", "Planned"],
+            ["Phase 4", "RAG Extension", "整合外部產品文件、新聞或產業資料進行輔助問答", "Future"],
+        ],
+        columns=["階段", "功能", "說明", "狀態"],
+    )
+
+    st.dataframe(roadmap, use_container_width=True, hide_index=True)
+
+    st.markdown("<div class='section-title'>作品集定位</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        這個 AI 模組的目標不是取代既有的資料分析流程，而是將已整理完成的 Gold Layer 資料轉換成更容易被業務、產品經理或管理者理解的文字洞察。
+        透過這個設計，本專案可從一般的資料儀表板延伸為具備 AI 輔助解讀能力的資料產品。
+        """
     )
